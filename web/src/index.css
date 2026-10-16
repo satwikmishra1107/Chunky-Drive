@@ -75,6 +75,15 @@ body {
   @apply bg-bg font-sans text-ink antialiased;
 }
 
+/* Laptops and desktops: everything is sized in rem, so a 90% base size gives the
+   look of 90% browser zoom. Phones keep 100%, so inputs stay at 16px and iOS
+   doesn't zoom in when one is tapped. */
+@media (min-width: 768px) {
+  html {
+    font-size: 90%;
+  }
+}
+
 /* Logo blocks pulse one after another while files are moving (see Logo's `busy`). */
 @keyframes chunk-pulse {
   0%,
