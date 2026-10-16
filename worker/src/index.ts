@@ -283,4 +283,23 @@ app.get("/files/:id/chunks/:index", async (c) => {
   });
 });
 
-export default app;
+// Uploads that never finished (closed tab, shut-down laptop, lost connection) stay hidden in
+// 'uploading' forever. Once a day, drop the records of any older than a day. As with deleting
+// a file, the stored chunks are left in place.
+async function cleanUpUnfinishedUploads(env: Bindings) {
+  const stale = "SELECT id FROM files WHERE status != 'ready' AND created_at < datetime('now', '-1 day')";
+  const [thumbnails, chunks, files] = await env.DB.batch([
+    env.DB.prepare(`DELETE FROM thumbnails WHERE file_id IN (${stale})`),
+    env.DB.prepare(`DELETE FROM chunks WHERE file_id IN (${stale})`),
+    env.DB.prepare(stale.replace("SELECT id FROM", "DELETE FROM")),
+  ]);
+  console.log(
+    `Cleanup: removed ${files.meta.changes} unfinished uploads, ${chunks.meta.changes} chunk rows, ${thumbnails.meta.changes} thumbnails`,
+  );
+}
+
+export default {
+  fetch: app.fetch,
+  // Runs on the schedule in wrangler.jsonc ("triggers").
+  scheduled: (_controller, env, ctx) => ctx.waitUntil(cleanUpUnfinishedUploads(env)),
+} satisfies ExportedHandler<Bindings>;

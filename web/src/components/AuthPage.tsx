@@ -35,8 +35,9 @@ function GoogleMark() {
   );
 }
 
+// 16px text on phones: iOS Safari zooms the page into any input smaller than that.
 const inputClass =
-  "w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm outline-none transition placeholder:text-muted/70 focus:border-accent focus:ring-4 focus:ring-accent/15";
+  "w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-base outline-none sm:text-sm transition placeholder:text-muted/70 focus:border-accent focus:ring-4 focus:ring-accent/15";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -84,7 +85,7 @@ function CodeInput({ value, onChange }: { value: string; onChange: (v: string) =
       autoFocus
       placeholder="000000"
       pattern="\d{6}"
-      className={`${inputClass} text-center font-mono text-2xl tracking-[0.5em]`}
+      className={`${inputClass} text-center font-mono text-2xl tracking-[0.5em] sm:text-2xl`}
     />
   );
 }

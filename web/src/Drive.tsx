@@ -280,7 +280,7 @@ export default function Drive({ user }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search your files"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted sm:text-sm"
           />
         </label>
         <a

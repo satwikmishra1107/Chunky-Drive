@@ -4,7 +4,7 @@
 // File hash = SHA-256 of all chunk hashes (hex) joined in chunk order,
 // the same rule as worker/scripts/roundtrip.mjs.
 
-import { completeUpload, getChunk, getFile, putChunk, putThumbnail, startUpload } from "./api";
+import { completeUpload, deleteFile, getChunk, getFile, putChunk, putThumbnail, startUpload } from "./api";
 import { chunkBlobs, deleteJob, saveChunk, saveJob, storedChunks, type DownloadJob } from "./downloadStore";
 import { makeThumbnail } from "./thumbnail";
 
@@ -73,15 +73,22 @@ export async function uploadFile(file: File, onProgress: ProgressFn): Promise<vo
   const chunkSizes = Array.from({ length: chunkCount }, (_, i) => Math.min(chunkSize, file.size - i * chunkSize));
   const report = progressTracker(onProgress, chunkSizes);
 
-  await runPool(chunkCount, PARALLEL, async (index) => {
-    // Only this slice is read from disk, never the whole file.
-    const data = await file.slice(index * chunkSize, (index + 1) * chunkSize).arrayBuffer();
-    const hash = await sha256Hex(data);
-    chunkHashes[index] = hash;
-    await withRetry(() => putChunk(fileId, index, data, hash, (loaded) => report(index, loaded)));
-  });
+  try {
+    await runPool(chunkCount, PARALLEL, async (index) => {
+      // Only this slice is read from disk, never the whole file.
+      const data = await file.slice(index * chunkSize, (index + 1) * chunkSize).arrayBuffer();
+      const hash = await sha256Hex(data);
+      chunkHashes[index] = hash;
+      await withRetry(() => putChunk(fileId, index, data, hash, (loaded) => report(index, loaded)));
+    });
 
-  await completeUpload(fileId, await fileHashOf(chunkHashes));
+    await completeUpload(fileId, await fileHashOf(chunkHashes));
+  } catch (error) {
+    // Drop the half-made file record now. If this can't reach the server either,
+    // the Worker's daily cleanup removes it.
+    await deleteFile(fileId).catch(() => {});
+    throw error;
+  }
 
   // A missing preview isn't worth failing the upload over; the card just shows an icon.
   const thumbnail = await makeThumbnail(file);
@@ -158,7 +165,10 @@ export async function runDownload(job: DownloadJob, signal: AbortSignal, onProgr
       await saveChunk(job.fileId, i, new Blob([bytes as Uint8Array<ArrayBuffer>]));
     });
   } catch (error) {
-    if (signal.aborted || !navigator.onLine) throw new PausedError();
+    // A dropped connection counts as a pause, not a failure, so saved chunks are kept.
+    // fetch reports network errors as TypeError; iOS also raises one when it suspends a
+    // backgrounded tab while chunks are in flight.
+    if (signal.aborted || !navigator.onLine || error instanceof TypeError) throw new PausedError();
     throw error;
   }
 
