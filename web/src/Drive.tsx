@@ -113,6 +113,8 @@ export default function Drive({ user }: Props) {
   // Downloads use the file's id as their transfer id, so a file has at most one download.
   const downloadJobs = useRef(new Map<string, DownloadJob>());
   const downloadControls = useRef(new Map<string, AbortController>());
+  // Settles once a download has fully stopped, including any chunk that was still being saved.
+  const downloadRuns = useRef(new Map<string, Promise<void>>());
 
   const runDownloadJob = async (job: DownloadJob) => {
     const id = job.fileId;
@@ -121,7 +123,9 @@ export default function Drive({ user }: Props) {
     const saved = await savedProgress(job);
     updateTransfer(id, { status: "active", startedAt: Date.now(), startDone: saved.done, ...saved, error: undefined });
     try {
-      await runDownload(job, control.signal, (done, chunks) => updateTransfer(id, { done, chunks }));
+      const run = runDownload(job, control.signal, (done, chunks) => updateTransfer(id, { done, chunks }));
+      downloadRuns.current.set(id, run.then(() => {}, () => {}));
+      await run;
       updateTransfer(id, { status: "done" });
     } catch (error) {
       if (error instanceof PausedError) {
@@ -133,7 +137,10 @@ export default function Drive({ user }: Props) {
       await deleteJob(id).catch(() => {});
       updateTransfer(id, { status: "error", error: (error as Error).message });
     } finally {
-      if (downloadControls.current.get(id) === control) downloadControls.current.delete(id);
+      if (downloadControls.current.get(id) === control) {
+        downloadControls.current.delete(id);
+        downloadRuns.current.delete(id);
+      }
     }
   };
 
@@ -164,13 +171,15 @@ export default function Drive({ user }: Props) {
     if (job && !downloadControls.current.has(id)) await runDownloadJob(job);
   };
 
-  const cancelDownload = (id: string) => {
+  const cancelDownload = async (id: string) => {
+    // Stop first. Half-downloaded chunks are simply dropped; a chunk that already arrived and
+    // passed its check may still be saving, so wait for that to finish before deleting.
+    const stopped = downloadRuns.current.get(id);
     downloadControls.current.get(id)?.abort();
     downloadJobs.current.delete(id);
     setTransfers((all) => all.filter((t) => t.id !== id));
-    // A chunk that was mid-save when we aborted can land just after the first delete; clear again shortly.
-    deleteJob(id).catch(() => {});
-    setTimeout(() => deleteJob(id).catch(() => {}), 2000);
+    await stopped;
+    await deleteJob(id).catch(() => {});
   };
 
   // Lists downloads saved in this browser (paused, or interrupted by a closed tab) as paused,

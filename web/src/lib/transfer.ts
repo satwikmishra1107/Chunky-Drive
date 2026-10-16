@@ -22,12 +22,24 @@ async function sha256Hex(data: BufferSource): Promise<string> {
 const fileHashOf = (chunkHashes: string[]) => sha256Hex(new TextEncoder().encode(chunkHashes.join("")));
 
 // Runs task(0..count-1) with at most `limit` running at the same time.
+// After a failure no new tasks start, and it only throws once every running task has
+// finished, so nothing (like a chunk being saved) is still happening when the caller cleans up.
 async function runPool(count: number, limit: number, task: (index: number) => Promise<void>) {
   let next = 0;
+  let failed = false;
   const lane = async () => {
-    while (next < count) await task(next++);
+    while (next < count && !failed) {
+      try {
+        await task(next++);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
   };
-  await Promise.all(Array.from({ length: Math.min(limit, count) }, lane));
+  const results = await Promise.allSettled(Array.from({ length: Math.min(limit, count) }, lane));
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
 }
 
 // Retries a step a few times with a short, growing pause before giving up.
