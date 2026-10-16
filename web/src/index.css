@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/* Theme colors. Components use these (bg-surface, text-muted, bg-accent, …)
+   so dark mode only needs the variables swapped below. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Light: soft paper white, white cards, cool charcoal text, deep teal accent. */
+:root {
+  --bg: #f8f8f6;
+  --surface: #ffffff;
+  --raised: #f1f1ee;
+  --hover: #e8e8e4;
+  --line: #e5e5e1;
+  --ink: #18181b;
+  --muted: #6b6b73;
+  --accent: #0f766e;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3f2ef;
+  --danger: #dc2626;
+  color-scheme: light;
+}
+
+/* Dark colors apply when the user picks Dark, or picks System and the computer is in dark mode.
+   The two blocks must stay identical. */
+:root[data-theme="dark"] {
+  --bg: #111113;
+  --surface: #19191c;
+  --raised: #222226;
+  --hover: #2c2c31;
+  --line: #2e2e33;
+  --ink: #f4f4f5;
+  --muted: #a1a1aa;
+  --accent: #2dd4bf;
+  --accent-ink: #042f2e;
+  --accent-soft: #0d2f2c;
+  --danger: #f87171;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111113;
+    --surface: #19191c;
+    --raised: #222226;
+    --hover: #2c2c31;
+    --line: #2e2e33;
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --accent: #2dd4bf;
+    --accent-ink: #042f2e;
+    --accent-soft: #0d2f2c;
+    --danger: #f87171;
+    color-scheme: dark;
+  }
+}
+
+body {
+  @apply bg-bg font-sans text-ink antialiased;
+}
+
+/* Logo blocks pulse one after another while files are moving (see Logo's `busy`). */
+@keyframes chunk-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.logo-busy rect {
+  animation: chunk-pulse 1.2s ease-in-out infinite;
+}
+.logo-busy rect:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.logo-busy rect:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-busy rect {
+    animation: none;
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "chunkydiscord-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "npm --prefix ../web run build && wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "roundtrip": "node scripts/roundtrip.mjs"
+  },
+  "dependencies": {
+    "better-auth": "^1.7.10",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "wrangler": "^4.151.0"
+  }
+}
