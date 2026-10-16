@@ -71,9 +71,12 @@ export function putChunk(
   data: ArrayBuffer,
   hash: string,
   onProgress: (loaded: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.onabort = () => reject(new DOMException("Upload paused", "AbortError"));
     xhr.open("PUT", `/api/files/${id}/chunks/${index}`);
     xhr.setRequestHeader("X-Chunk-Hash", hash);
     xhr.setRequestHeader("Content-Type", "application/octet-stream");

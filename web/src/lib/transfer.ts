@@ -65,25 +65,59 @@ function progressTracker(onProgress: ProgressFn, chunkSizes: number[]) {
   };
 }
 
-export async function uploadFile(file: File, onProgress: ProgressFn): Promise<void> {
-  if (file.size === 0) throw new Error("Empty files can't be uploaded");
+// Thrown when a transfer stops because it was paused or the connection dropped, not because
+// something went wrong. Everything already transferred is kept.
+export class PausedError extends Error {
+  constructor() {
+    super("Paused");
+  }
+}
 
-  const { fileId, chunkSize, chunkCount } = await startUpload(file);
-  const chunkHashes = new Array<string>(chunkCount);
+// Uploads can pause and resume while the tab stays open: the server already records every
+// chunk it receives, so resuming asks which ones it has and sends only the rest. A closed tab
+// loses access to the file, so the page drops the upload then (see Drive.tsx).
+
+export type UploadJob = { fileId: string; chunkSize: number; chunkCount: number };
+
+// Creates the file record on the server.
+export async function createUploadJob(file: File): Promise<UploadJob> {
+  if (file.size === 0) throw new Error("Empty files can't be uploaded");
+  return startUpload(file);
+}
+
+// Sends whatever chunks the server doesn't have yet, then seals the file. Aborting `signal`
+// pauses: it throws PausedError and keeps the file record. A real failure deletes it.
+export async function runUpload(file: File, job: UploadJob, signal: AbortSignal, onProgress: ProgressFn): Promise<void> {
+  const { fileId, chunkSize, chunkCount } = job;
   const chunkSizes = Array.from({ length: chunkCount }, (_, i) => Math.min(chunkSize, file.size - i * chunkSize));
   const report = progressTracker(onProgress, chunkSizes);
+  const chunkHashes = new Array<string>(chunkCount);
 
   try {
-    await runPool(chunkCount, PARALLEL, async (index) => {
+    // Chunks that arrived before a pause count as done, and their hashes feed the file hash.
+    const { chunks: received } = await getFile(fileId);
+    for (const chunk of received) {
+      chunkHashes[chunk.index] = chunk.hash;
+      report(chunk.index, chunk.size);
+    }
+    const missing = chunkSizes.map((_, i) => i).filter((i) => !chunkHashes[i]);
+
+    await runPool(missing.length, PARALLEL, async (n) => {
+      if (signal.aborted) throw new PausedError();
+      const index = missing[n];
       // Only this slice is read from disk, never the whole file.
       const data = await file.slice(index * chunkSize, (index + 1) * chunkSize).arrayBuffer();
       const hash = await sha256Hex(data);
+      await withRetry(() => {
+        if (signal.aborted) throw new PausedError();
+        return putChunk(fileId, index, data, hash, (loaded) => report(index, loaded), signal);
+      });
       chunkHashes[index] = hash;
-      await withRetry(() => putChunk(fileId, index, data, hash, (loaded) => report(index, loaded)));
     });
 
     await completeUpload(fileId, await fileHashOf(chunkHashes));
   } catch (error) {
+    if (signal.aborted || !navigator.onLine) throw new PausedError();
     // Drop the half-made file record now. If this can't reach the server either,
     // the Worker's daily cleanup removes it.
     await deleteFile(fileId).catch(() => {});
@@ -98,12 +132,6 @@ export async function uploadFile(file: File, onProgress: ProgressFn): Promise<vo
 // Downloads go chunk by chunk into the browser's storage (lib/downloadStore.ts), then the
 // finished file is handed to the browser's normal download. Stopping part-way (pause, closed
 // tab, lost connection) keeps every verified chunk, so resuming only fetches what's missing.
-
-export class PausedError extends Error {
-  constructor() {
-    super("Paused");
-  }
-}
 
 // Fetches the file's chunk list and records a new download job.
 export async function createDownloadJob(fileId: string, userId: string): Promise<DownloadJob> {

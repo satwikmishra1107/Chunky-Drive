@@ -88,8 +88,8 @@ export default function TransferPanel({ transfers, onClear, onPause, onResume, o
       {!collapsed && (
         <ul className="max-h-72 overflow-y-auto py-1">
           {transfers.map((t) => {
-            // Only the tab running a download can control it.
-            const controllable = t.kind === "download" && !t.remote;
+            // Only the tab running a transfer can pause, resume or cancel it.
+            const controllable = !t.remote;
             return (
               <li key={t.id} className="flex items-center gap-3 py-2.5 pl-5 pr-3">
                 {t.kind === "upload" ? (

@@ -14,11 +14,12 @@ import { formatBytes } from "./lib/format";
 import { deleteJob, listJobs, type DownloadJob } from "./lib/downloadStore";
 import {
   createDownloadJob,
+  createUploadJob,
   PausedError,
   runDownload,
+  runUpload,
   savedProgress,
-  uploadFile,
-  type ProgressFn,
+  type UploadJob,
 } from "./lib/transfer";
 
 type View = "grid" | "list";
@@ -85,30 +86,92 @@ export default function Drive({ user }: Props) {
   const updateTransfer = (id: string, patch: Partial<Transfer>) =>
     setTransfers((all) => all.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
-  const runTransfer = async (id: string, work: (onProgress: ProgressFn) => Promise<void>) => {
-    updateTransfer(id, { status: "active", startedAt: Date.now() });
+  // Uploads in this tab, by transfer id. `job` is set once the server has a record for the file.
+  const uploads = useRef(new Map<string, { file: File; job?: UploadJob }>());
+  const uploadControls = useRef(new Map<string, AbortController>());
+  // Settles once an upload has fully stopped, so cancelling can delete its record afterwards.
+  const uploadRuns = useRef(new Map<string, Promise<void>>());
+
+  const runUploadJob = async (id: string) => {
+    const entry = uploads.current.get(id);
+    if (!entry || uploadControls.current.has(id)) return; // Cancelled while waiting, or already running.
+    const control = new AbortController();
+    uploadControls.current.set(id, control);
+    updateTransfer(id, { status: "active", startedAt: Date.now(), error: undefined });
     try {
-      await work((done, chunks) => updateTransfer(id, { done, chunks }));
+      entry.job ??= await createUploadJob(entry.file);
+      let first = true;
+      const run = runUpload(entry.file, entry.job, control.signal, (done, chunks) => {
+        // The first report is what the server already had, so speed counts only new bytes.
+        updateTransfer(id, first ? { done, chunks, startDone: done } : { done, chunks });
+        first = false;
+      });
+      uploadRuns.current.set(id, run.then(() => {}, () => {}));
+      await run;
+      uploads.current.delete(id);
       updateTransfer(id, { status: "done" });
+      await refresh();
     } catch (error) {
+      if (error instanceof PausedError) {
+        updateTransfer(id, { status: "paused" });
+        return;
+      }
+      uploads.current.delete(id);
       updateTransfer(id, { status: "error", error: (error as Error).message });
+    } finally {
+      uploadControls.current.delete(id);
+      uploadRuns.current.delete(id);
     }
+  };
+
+  // Uploads run one file at a time, in the order they were added.
+  const queueUpload = (id: string) => {
+    uploadQueue.current = uploadQueue.current.then(() => runUploadJob(id));
   };
 
   const addUploads = (picked: FileList | null) => {
     if (!picked?.length) return;
     for (const file of Array.from(picked)) {
       const id = crypto.randomUUID();
+      uploads.current.set(id, { file });
       setTransfers((all) => [
         ...all,
         { id, kind: "upload", name: file.name, size: file.size, done: 0, startedAt: 0, status: "queued" },
       ]);
-      uploadQueue.current = uploadQueue.current.then(async () => {
-        await runTransfer(id, (onProgress) => uploadFile(file, onProgress));
-        await refresh();
-      });
+      queueUpload(id);
     }
   };
+
+  const pauseUpload = (id: string) => uploadControls.current.get(id)?.abort();
+
+  const resumeUpload = (id: string) => {
+    if (!uploads.current.has(id) || uploadControls.current.has(id)) return;
+    updateTransfer(id, { status: "queued" });
+    queueUpload(id);
+  };
+
+  const cancelUpload = async (id: string) => {
+    const entry = uploads.current.get(id);
+    const stopped = uploadRuns.current.get(id);
+    uploads.current.delete(id);
+    uploadControls.current.get(id)?.abort();
+    setTransfers((all) => all.filter((t) => t.id !== id));
+    await stopped;
+    if (entry?.job) await deleteFile(entry.job.fileId).catch(() => {});
+  };
+
+  // A closed tab can't reach the file again, so its unfinished uploads are dropped on the way
+  // out. If even this doesn't get through (crash, dead battery), the Worker's daily cleanup does it.
+  useEffect(() => {
+    const dropUnfinished = (event: PageTransitionEvent) => {
+      if (event.persisted) return; // Kept in the back/forward cache: the page may come back and resume.
+      for (const { job } of uploads.current.values()) {
+        if (job) fetch(`/api/files/${job.fileId}`, { method: "DELETE", keepalive: true }).catch(() => {});
+      }
+    };
+    window.addEventListener("pagehide", dropUnfinished);
+    return () => window.removeEventListener("pagehide", dropUnfinished);
+  }, []);
 
   // Downloads use the file's id as their transfer id, so a file has at most one download.
   const downloadJobs = useRef(new Map<string, DownloadJob>());
@@ -404,9 +467,9 @@ export default function Drive({ user }: Props) {
 
       <TransferPanel
         transfers={allTransfers}
-        onPause={pauseDownload}
-        onResume={resumeDownload}
-        onCancel={cancelDownload}
+        onPause={(id) => (uploads.current.has(id) ? pauseUpload(id) : pauseDownload(id))}
+        onResume={(id) => (uploads.current.has(id) ? resumeUpload(id) : resumeDownload(id))}
+        onCancel={(id) => (uploads.current.has(id) ? cancelUpload(id) : cancelDownload(id))}
         onClear={() => {
           setTransfers((all) => all.filter((t) => t.status === "active" || t.status === "queued"));
           dismissFinished();
