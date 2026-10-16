@@ -334,7 +334,7 @@ export default function Drive({ user }: Props) {
         <div className="flex shrink-0 items-center gap-2.5 md:w-56">
           <Logo className="size-8 text-accent" busy={allTransfers.some((t) => t.status === "active")} />
           <span className="hidden text-xl font-extrabold tracking-tight sm:inline">
-            chunky<span className="text-accent">drive</span>
+            Shie<span className="text-accent">drive</span>
           </span>
         </div>
         <label className="flex h-11 max-w-2xl flex-1 items-center gap-3 rounded-full border border-transparent bg-raised px-4 transition focus-within:border-accent/50 focus-within:bg-surface">
@@ -348,11 +348,11 @@ export default function Drive({ user }: Props) {
         </label>
         <a
           href="/about"
-          title="How Chunky Drive works"
+          title="How Shie Drive works"
           className="flex shrink-0 items-center gap-1.5 rounded-full px-2 py-2 text-sm font-semibold text-accent transition hover:bg-accent-soft lg:px-3"
         >
           <Info className="size-4" />
-          <span className="hidden lg:inline">How Chunky Drive works?</span>
+          <span className="hidden lg:inline">How Shie Drive works?</span>
         </a>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <ThemeToggle />
