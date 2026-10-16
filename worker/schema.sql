@@ -1,5 +1,5 @@
--- ChunkyDiscord D1 schema
--- Discord IDs are TEXT: they are too large to store exactly as JavaScript numbers.
+-- Chunky Drive D1 schema
+-- Storage-network IDs (channel_id, message_id) are TEXT: they are too large to store exactly as JavaScript numbers.
 
 -- One row per uploaded file.
 CREATE TABLE IF NOT EXISTS files (

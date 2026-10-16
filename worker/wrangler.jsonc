@@ -1,12 +1,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "chunkydiscord",
+  "name": "chunkydrive",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   // Better Auth uses Node's async_hooks.
   "compatibility_flags": ["nodejs_compat"],
   // The live site. Cloudflare creates the DNS record and certificate for it on deploy.
   "routes": [{ "pattern": "chunkydrive.satwikdevs.in", "custom_domain": true }],
+  // Only the domain above, not an extra *.workers.dev address.
+  "workers_dev": false,
   // The built web app (web/dist) is served by this Worker too. /api/* goes to the code
   // in src/; every other path is the page, with unknown paths (like /signup) getting index.html.
   "assets": {

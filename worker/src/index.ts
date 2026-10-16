@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { getAuth, type AuthBindings } from "./auth";
 
 type Bindings = AuthBindings & {
-  DISCORD_BOT_TOKEN: string;
+  STORAGE_BOT_TOKEN: string;
   CHANNEL_IDS: string;
 };
 
@@ -22,7 +22,8 @@ type FileRow = {
   created_at: string;
 };
 
-const DISCORD_API = "https://discord.com/api/v10";
+// The third-party storage network's API.
+const STORAGE_API = "https://discord.com/api/v10";
 const CHUNK_SIZE = 8 * 1024 * 1024;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const MAX_THUMBNAIL_SIZE = 200 * 1024;
@@ -42,8 +43,8 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-// Calls the Discord REST API, waiting and retrying when Discord says we are rate limited.
-async function discord(
+// Calls the storage network's API, waiting and retrying when it says we are rate limited.
+async function storageApi(
   env: Bindings,
   path: string,
   makeInit: () => RequestInit = () => ({}),
@@ -51,9 +52,9 @@ async function discord(
 ): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     const init = makeInit();
-    const res = await fetch(`${DISCORD_API}${path}`, {
+    const res = await fetch(`${STORAGE_API}${path}`, {
       ...init,
-      headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`, ...init.headers },
+      headers: { Authorization: `Bot ${env.STORAGE_BOT_TOKEN}`, ...init.headers },
     });
     if (res.status !== 429 || attempt >= attempts) return res;
     const { retry_after, global } = await res.json<{ retry_after: number; global?: boolean }>();
@@ -111,15 +112,15 @@ app.put("/files/:id/chunks/:index", async (c) => {
     return c.json({ error: `Chunk must be 1 to ${CHUNK_SIZE} bytes` }, 413);
   }
 
-  const res = await discord(c.env, `/channels/${file.channel_id}/messages`, () => {
+  const res = await storageApi(c.env, `/channels/${file.channel_id}/messages`, () => {
     const form = new FormData();
     form.append("payload_json", JSON.stringify({ attachments: [{ id: 0, filename: "chunk.bin" }] }));
     form.append("files[0]", new Blob([data]), "chunk.bin");
     return { method: "POST", body: form };
   });
   if (!res.ok) {
-    console.error("Discord upload failed", res.status, await res.text());
-    return c.json({ error: "Storage upload failed", discordStatus: res.status }, 502);
+    console.error("Storage upload failed", res.status, await res.text());
+    return c.json({ error: "Storage upload failed", storageStatus: res.status }, 502);
   }
   const message = await res.json<{ id: string }>();
 
@@ -199,7 +200,7 @@ app.get("/files/:id", async (c) => {
   });
 });
 
-// Delete a file's records. The Discord messages are left in place on purpose.
+// Delete a file's records. The stored chunks are left in place on purpose.
 app.delete("/files/:id", async (c) => {
   const file = await getFile(c.env, c.req.param("id"), c.get("userId"));
   if (!file) return c.json({ error: "File not found" }, 404);
@@ -260,10 +261,10 @@ app.get("/files/:id/chunks/:index", async (c) => {
     .first<{ message_id: string; channel_id: string }>();
   if (!row) return c.json({ error: "Chunk not found" }, 404);
 
-  const res = await discord(c.env, `/channels/${row.channel_id}/messages/${row.message_id}`);
+  const res = await storageApi(c.env, `/channels/${row.channel_id}/messages/${row.message_id}`);
   if (!res.ok) {
-    console.error("Discord message fetch failed", res.status, await res.text());
-    return c.json({ error: "Storage lookup failed", discordStatus: res.status }, 502);
+    console.error("Storage lookup failed", res.status, await res.text());
+    return c.json({ error: "Storage lookup failed", storageStatus: res.status }, 502);
   }
   const message = await res.json<{ attachments: { url: string }[] }>();
   const url = message.attachments[0]?.url;

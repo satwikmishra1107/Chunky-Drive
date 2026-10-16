@@ -1,5 +1,5 @@
 {
-  "name": "chunkydiscord-worker",
+  "name": "chunkydrive-worker",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,6 +1,6 @@
 # Chunky Drive
 
-A Google-Drive-style file store that keeps files as 8 MB chunks in Discord channels.
+A Google-Drive-style file store that keeps files as 8 MB chunks on a third-party storage network.
 
 Live at **https://chunkydrive.satwikdevs.in**. Every push to `main` is built and deployed by
 Cloudflare Workers Builds (path `worker`, build `npm ci && npm ci --prefix ../web && npm run build --prefix ../web`,
@@ -8,13 +8,13 @@ deploy `npx wrangler deploy`).
 
 ```
 web/      React page (Vite + Tailwind): upload, download, delete
-worker/   Cloudflare Worker (Hono): talks to Discord and the D1 database
+worker/   Cloudflare Worker (Hono): talks to the storage network and the D1 database
 ```
 
 ## How it works
 
 - The browser splits a file into 8 MB chunks, hashes each one (SHA-256), and uploads 3 at a time.
-- The Worker posts each chunk to a Discord channel and saves its message ID and hash in D1.
+- The Worker posts each chunk to a storage channel and saves its message ID and hash in D1.
 - Downloads fetch chunks by message ID, check every hash, and write them back in order.
 - File hash = SHA-256 of the chunk hashes joined in order.
 
