@@ -215,7 +215,7 @@ export default function AuthPage() {
         <div className="flex items-center gap-2">
           <Logo className="size-7 text-accent" />
           <span className="text-lg font-extrabold tracking-tight">
-            chunky<span className="text-accent">drive</span>
+            Shie<span className="text-accent">drive</span>
           </span>
         </div>
         <div className="flex items-center gap-4">
