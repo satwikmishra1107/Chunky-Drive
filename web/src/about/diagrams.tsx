@@ -193,7 +193,7 @@ export function UploadDiagram() {
           object ID + hash → database
         </text>
         <text x={20} y={318} className="fill-muted" fontFamily={MONO} fontSize={10}>
-          a failed send retries after 1 s, then 2 s
+          a failed send retries with a growing pause
         </text>
       </svg>
     </Frame>

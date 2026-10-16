@@ -309,9 +309,9 @@ export default function About() {
                 title: "Send",
                 body: (
                   <>
-                    A pool of three lanes <Code>PUT</Code>s chunks in parallel, retrying failures up to three times with a
-                    1 s then 2 s pause. The Worker checks ownership, index range, size (≤ 8 MB) and hash format, stores the
-                    chunk, and honours the network's rate-limit <Code>retry-after</Code> before giving up.
+                    A pool of three lanes <Code>PUT</Code>s chunks in parallel, retrying failures up to five times with a
+                    growing 1–4 s pause. The Worker checks ownership, index range, size (≤ 8 MB) and hash format, then
+                    streams the chunk straight through to the storage network without buffering it.
                   </>
                 ),
               },
@@ -374,7 +374,7 @@ export default function About() {
                 body: (
                   <>
                     The browser SHA-256s every chunk as it lands. A mismatch throws, and the same retry loop fetches that
-                    chunk again — up to three attempts — while the other lanes keep going.
+                    chunk again — up to five attempts — while the other lanes keep going.
                   </>
                 ),
               },

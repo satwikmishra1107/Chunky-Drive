@@ -107,21 +107,81 @@ app.put("/files/:id/chunks/:index", async (c) => {
     return c.json({ error: "Chunk index out of range" }, 400);
   }
 
-  const data = await c.req.arrayBuffer();
-  if (data.byteLength === 0 || data.byteLength > CHUNK_SIZE) {
+  const size = Number(c.req.header("Content-Length"));
+  const body = c.req.raw.body;
+  if (!body || !Number.isInteger(size) || size <= 0 || size > CHUNK_SIZE) {
     return c.json({ error: `Chunk must be 1 to ${CHUNK_SIZE} bytes` }, 413);
   }
 
-  const res = await storageApi(c.env, `/channels/${file.channel_id}/messages`, () => {
-    const form = new FormData();
-    form.append("payload_json", JSON.stringify({ attachments: [{ id: 0, filename: "chunk.bin" }] }));
-    form.append("files[0]", new Blob([data]), "chunk.bin");
-    return { method: "POST", body: form };
-  });
+  // Stream the chunk through instead of reading it into memory: copying 8 MB in JavaScript
+  // goes over the free plan's 10 ms CPU limit, while a piped stream is moved by Cloudflare
+  // itself. Only the small multipart header and footer are written by this code.
+  const boundary = `chunky-${crypto.randomUUID()}`;
+  const encoder = new TextEncoder();
+  const head = encoder.encode(
+    `--${boundary}
+
+Content-Disposition: form-data; name="payload_json"
+
+Content-Type: application/json
+
+
+
+` +
+      JSON.stringify({ attachments: [{ id: 0, filename: "chunk.bin" }] }) +
+      `
+
+--${boundary}
+
+Content-Disposition: form-data; name="files[0]"; filename="chunk.bin"
+
+` +
+      `Content-Type: application/octet-stream
+
+
+
+`,
+  );
+  const tail = encoder.encode(`
+
+--${boundary}--
+
+`);
+  // Also checks the body really is `size` bytes: a longer or shorter one makes the send fail.
+  const { readable, writable } = new FixedLengthStream(head.byteLength + size + tail.byteLength);
+  const pump = (async () => {
+    let writer = writable.getWriter();
+    await writer.write(head);
+    writer.releaseLock();
+    await body.pipeTo(writable, { preventClose: true });
+    writer = writable.getWriter();
+    await writer.write(tail);
+    await writer.close();
+  })();
+
+  // A stream can only be sent once, so a rate-limited send isn't retried here (attempts = 1);
+  // the 503 below makes the browser retry the whole chunk after a pause.
+  let res: Response;
+  try {
+    res = await storageApi(
+      c.env,
+      `/channels/${file.channel_id}/messages`,
+      () => ({ method: "POST", body: readable, headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` } }),
+      1,
+    );
+  } catch (error) {
+    pump.catch(() => {});
+    console.error("Chunk stream failed", error);
+    return c.json({ error: "Chunk upload was interrupted" }, 400);
+  }
   if (!res.ok) {
+    // Rejected before reading everything: the half-sent stream errors, which is expected.
+    pump.catch(() => {});
+    if (res.status === 429) return c.json({ error: "Storage is busy, try again shortly" }, 503);
     console.error("Storage upload failed", res.status, await res.text());
     return c.json({ error: "Storage upload failed", storageStatus: res.status }, 502);
   }
+  await pump;
   const message = await res.json<{ id: string }>();
 
   // A retried chunk replaces the earlier row.
@@ -130,7 +190,7 @@ app.put("/files/:id/chunks/:index", async (c) => {
      ON CONFLICT (file_id, chunk_index) DO UPDATE SET
        message_id = excluded.message_id, chunk_hash = excluded.chunk_hash, size = excluded.size`,
   )
-    .bind(file.id, index, message.id, chunkHash, data.byteLength)
+    .bind(file.id, index, message.id, chunkHash, size)
     .run();
 
   return c.json({ ok: true });

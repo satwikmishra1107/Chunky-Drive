@@ -27,7 +27,7 @@
     }
   ],
   "vars": {
-    "CHANNEL_IDS": "1350373304804053094,1350366620798681199",
+    "CHANNEL_IDS": "1560709921220071577,1560710173662777435",
     // Where users open the site. Locally, .dev.vars overrides this with http://localhost:5173.
     "BETTER_AUTH_URL": "https://chunkydrive.satwikdevs.in",
     // Sender for sign-up codes and password resets (domain must be verified in Resend).

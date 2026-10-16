@@ -9,7 +9,7 @@ import { chunkBlobs, deleteJob, saveChunk, saveJob, storedChunks, type DownloadJ
 import { makeThumbnail } from "./thumbnail";
 
 const PARALLEL = 3;
-const ATTEMPTS = 3;
+const ATTEMPTS = 5;
 
 // doneBytes for the size/time text; chunks[i] = how full chunk i is (0 to 1), for the chunked bar.
 export type ProgressFn = (doneBytes: number, chunks: number[]) => void;
