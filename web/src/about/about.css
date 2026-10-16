@@ -1,0 +1,204 @@
+/* "How it works" page. Uses the app's theme colors, so it follows Light/Dark like the drive. */
+
+.about .ambient-glow {
+  background:
+    radial-gradient(ellipse 60% 40% at 85% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 35% at 10% 100%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 70%);
+}
+
+.about .diagram-bg {
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
+}
+
+.about .glow-shadow {
+  box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Sections fade up as they scroll into view (see About.tsx). */
+.about [data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.7s ease-out,
+    transform 0.7s ease-out;
+}
+.about [data-reveal].revealed {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Diagram animations. Every moving part has a still fallback for reduced motion. ---- */
+
+.about .flow {
+  animation: flow var(--dur, 2.4s) linear var(--delay, 0s) infinite both;
+}
+@keyframes flow {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx, 0), var(--dy, 0));
+    opacity: 0;
+  }
+}
+
+/* Highlight that steps across the file, one chunk at a time, while it's hashed. */
+.about .scan {
+  animation: scan 4.8s steps(8, end) infinite;
+}
+@keyframes scan {
+  to {
+    transform: translateX(680px);
+  }
+}
+
+/* A chunk's hash lights up as the scan reaches it. */
+.about .hash {
+  animation: hash 4.8s linear var(--delay, 0s) infinite both;
+}
+@keyframes hash {
+  0% {
+    fill: var(--accent);
+    opacity: 1;
+  }
+  18% {
+    fill: var(--muted);
+  }
+  100% {
+    fill: var(--muted);
+    opacity: 1;
+  }
+}
+
+/* Download: verified chunks drop into place, one bad chunk is caught and fetched again,
+   then the whole file checks out. All on one 8 s loop. */
+.about .slot {
+  animation: slot 8s ease-out var(--delay, 0s) infinite both;
+}
+@keyframes slot {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+  5%,
+  70% {
+    opacity: 1;
+    transform: none;
+  }
+  76%,
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+.about .bad {
+  animation: bad 8s ease-out 3s infinite both;
+}
+@keyframes bad {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+  3%,
+  9% {
+    opacity: 1;
+    transform: none;
+  }
+  11%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.about .bad-note {
+  animation: bad-note 8s linear 3s infinite both;
+}
+@keyframes bad-note {
+  0%,
+  2% {
+    opacity: 0;
+  }
+  4%,
+  15% {
+    opacity: 1;
+  }
+  18%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.about .done {
+  animation: done 8s linear infinite both;
+}
+@keyframes done {
+  0%,
+  58% {
+    opacity: 0;
+  }
+  61%,
+  69% {
+    opacity: 1;
+  }
+  72%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.about .waiting {
+  animation: waiting 8s linear infinite both;
+}
+@keyframes waiting {
+  0%,
+  57% {
+    opacity: 1;
+  }
+  59%,
+  71% {
+    opacity: 0;
+  }
+  74%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Chunks still to fetch on a paused download breathe gently. */
+.about .pending {
+  animation: pending 2.4s ease-in-out infinite;
+}
+@keyframes pending {
+  50% {
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .about .flow,
+  .about .scan,
+  .about .bad,
+  .about .bad-note,
+  .about .waiting {
+    display: none;
+  }
+  .about .hash,
+  .about .slot,
+  .about .done,
+  .about .pending {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

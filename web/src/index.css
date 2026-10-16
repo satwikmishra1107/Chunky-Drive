@@ -15,6 +15,10 @@
   --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  /* Fonts for the "How it works" page (about/About.tsx), matching satwikdevs.in. */
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* Light: soft paper white, white cards, cool charcoal text, deep teal accent. */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CloudUpload, HardDrive, Infinity as InfinityIcon, LayoutGrid, List, Plus, Search } from "lucide-react";
+import { CloudUpload, HardDrive, Info, Infinity as InfinityIcon, LayoutGrid, List, Plus, Search } from "lucide-react";
 import FileCard from "./components/FileCard";
 import ConfirmDialog from "./components/ConfirmDialog";
 import FileList from "./components/FileList";
@@ -274,6 +274,14 @@ export default function Drive({ user }: Props) {
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
           />
         </label>
+        <a
+          href="/about"
+          title="How Chunky Drive works"
+          className="flex shrink-0 items-center gap-1.5 rounded-full px-2 py-2 text-sm font-semibold text-accent transition hover:bg-accent-soft lg:px-3"
+        >
+          <Info className="size-4" />
+          <span className="hidden lg:inline">How Chunky Drive works?</span>
+        </a>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <ThemeToggle />
           <UserMenu user={user} />

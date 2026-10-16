@@ -217,7 +217,12 @@ export default function AuthPage() {
             chunky<span className="text-accent">drive</span>
           </span>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-4">
+          <a href="/about" className="text-sm font-medium text-muted transition hover:text-ink">
+            How it works
+          </a>
+          <ThemeToggle />
+        </div>
       </div>
 
       <main className="flex flex-1 items-center justify-center px-4 pb-16">
