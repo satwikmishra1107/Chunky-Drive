@@ -2,6 +2,10 @@
 
 A Google-Drive-style file store that keeps files as 8 MB chunks in Discord channels.
 
+Live at **https://chunkydrive.satwikdevs.in**. Every push to `main` is built and deployed by
+Cloudflare Workers Builds (path `worker`, build `npm ci && npm ci --prefix ../web && npm run build --prefix ../web`,
+deploy `npx wrangler deploy`).
+
 ```
 web/      React page (Vite + Tailwind): upload, download, delete
 worker/   Cloudflare Worker (Hono): talks to Discord and the D1 database

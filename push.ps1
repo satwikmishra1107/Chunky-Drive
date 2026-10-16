@@ -1,6 +1,6 @@
 # push.ps1
 
-$repo = "https://github.com/satwikmishra1107/ChunkyDiscord"
+$repo = "https://github.com/satwikmishra1107/Chunky-Drive"
 $branch = "main"
 
 if (!(Test-Path ".git")) {
