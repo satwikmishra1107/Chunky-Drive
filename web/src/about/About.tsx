@@ -128,6 +128,10 @@ const FAQ = [
     a: "Uploads read your file from disk one 8 MB slice at a time, so a large file needs no more memory than a small one. Downloads are reassembled in your browser's storage, so the practical limit is the free space on your device.",
   },
   {
+    q: "Can I organise files into folders?",
+    a: "Yes — folders inside folders, as deep as you like. Moving files or whole folders is instant whatever their size, because only the map in the database changes; the stored pieces never move.",
+  },
+  {
     q: "Who can see my files?",
     a: "Only your account. Every request is checked against your session, and every database lookup is filtered to files you own — asking for someone else's file simply returns “not found”.",
   },
@@ -282,7 +286,7 @@ export default function About() {
                 body: (
                   <>
                     <Code>POST /api/files</Code> with name and size. The Worker creates a file record in the{" "}
-                    <Code>uploading</Code> state, picks a storage bucket for all of its chunks, and replies with the file
+                    <Code>uploading</Code> state inside the folder you're in, picks a storage bucket for all of its chunks, and replies with the file
                     ID, chunk size and chunk count.
                   </>
                 ),
@@ -408,6 +412,7 @@ export default function About() {
                 ["Offline", "If the connection drops, the download is marked paused, not failed."],
                 ["Reopen", "Unfinished jobs are restored from IndexedDB and shown as paused when you return."],
                 ["Resume", "Only the missing chunk indexes are requested — finished work is never repeated."],
+                ["Uploads", "Pause and resume too while the tab is open: the server already records every chunk it receives, so resuming sends only the rest. Closing the tab cancels them, and a daily job sweeps up any that slip through."],
                 ["Many tabs", "A BroadcastChannel shares live progress, so a second tab shows transfers running in the first."],
               ].map(([title, body]) => (
                 <li key={title} className="border-t border-line pt-3">
@@ -423,8 +428,8 @@ export default function About() {
           id="data"
           index="06"
           label="Data model"
-          title="Two tables hold the whole system together."
-          lead="The database never stores file contents. It keeps one record per file and one small row per piece — just enough to find, order and verify every byte."
+          title="Three tables hold the whole system together."
+          lead="The database never stores file contents. It keeps one record per file, one small row per piece, and the folder tree — just enough to find, order and verify every byte, and to show it where you put it."
         >
           <div data-reveal className="grid items-start gap-6 lg:grid-cols-2">
             <Table
@@ -437,20 +442,33 @@ export default function About() {
                 ["bucket_id", "text", "Where on the storage network all of its chunks live."],
                 ["chunk_count", "int", "How many pieces to expect."],
                 ["file_hash", "sha-256", "Hash of the ordered chunk hashes, set when the upload is sealed."],
+                ["folder_id", "fk → folders", "The folder it sits in; empty means the top of My Drive."],
                 ["status", "enum", "uploading → ready (or failed)."],
               ]}
             />
-            <Table
-              name="chunks"
-              note="one row per 8 MB piece · cascades on delete"
-              rows={[
-                ["file_id", "fk → files", "Which file this piece belongs to."],
-                ["chunk_index", "int", "Its position. (file_id, chunk_index) is the primary key."],
-                ["object_id", "text", "Where the piece sits on the storage network."],
-                ["chunk_hash", "sha-256", "The fingerprint checked on every download."],
-                ["size", "int", "Bytes in this piece (the last one is usually smaller)."],
-              ]}
-            />
+            <div className="grid gap-6">
+              <Table
+                name="chunks"
+                note="one row per 8 MB piece · cascades on delete"
+                rows={[
+                  ["file_id", "fk → files", "Which file this piece belongs to."],
+                  ["chunk_index", "int", "Its position. (file_id, chunk_index) is the primary key."],
+                  ["object_id", "text", "Where the piece sits on the storage network."],
+                  ["chunk_hash", "sha-256", "The fingerprint checked on every download."],
+                  ["size", "int", "Bytes in this piece (the last one is usually smaller)."],
+                ]}
+              />
+              <Table
+                name="folders"
+                note="one row per folder · nests through parent_id"
+                rows={[
+                  ["id", "uuid · pk", "The folder's ID."],
+                  ["owner_id", "text", "Who it belongs to."],
+                  ["parent_id", "fk → folders", "The folder it sits in; deleting a folder removes everything below it."],
+                  ["name", "text", "Unique among its neighbours, ignoring case — a clash becomes “Photos (1)”."],
+                ]}
+              />
+            </div>
           </div>
           <dl data-reveal className="grid gap-x-8 gap-y-6 sm:grid-cols-3">
             {[
@@ -512,7 +530,7 @@ export default function About() {
             {[
               ["Frontend", ["React 19", "TypeScript", "Vite", "Tailwind CSS v4"]],
               ["In the browser", ["Web Crypto (SHA-256, PBKDF2)", "IndexedDB", "BroadcastChannel", "OffscreenCanvas thumbnails"]],
-              ["Edge", ["Cloudflare Workers", "Hono", "Better Auth", "Transactional email"]],
+              ["Edge", ["Cloudflare Workers", "Hono", "Better Auth", "Cron Triggers", "Transactional email"]],
               ["Data & delivery", ["Cloudflare D1 (SQLite)", "Third-party storage network", "Workers Builds CI/CD", "Custom domain + TLS"]],
             ].map(([group, items]) => (
               <div key={group as string} className="border-t border-line pt-3">

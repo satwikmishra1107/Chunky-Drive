@@ -13,7 +13,13 @@ const button =
 // Download and delete buttons that appear when hovering a file.
 export default function FileActions({ file, onDownload, onDelete }: Props) {
   return (
-    <div className="flex shrink-0 items-center">
+    // Clicks here must not also select the file or start a long-press.
+    <div
+      className="flex shrink-0 items-center"
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       <button onClick={() => onDownload(file)} className={`${button} hover:text-ink`} aria-label={`Download ${file.name}`}>
         <Download className="size-4" />
       </button>

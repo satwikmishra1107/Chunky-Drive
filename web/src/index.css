@@ -75,6 +75,16 @@ body {
   @apply bg-bg font-sans text-ink antialiased;
 }
 
+/* Tailwind v4 leaves buttons with the default arrow cursor; show the hand on anything clickable. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label:has(> input[type="file"]) {
+    cursor: pointer;
+  }
+}
+
 /* Laptops and desktops: everything is sized in rem, so a 90% base size gives the
    look of 90% browser zoom. Phones keep 100%, so inputs stay at 16px and iOS
    doesn't zoom in when one is tapped. */

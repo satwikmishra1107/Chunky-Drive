@@ -1,6 +1,18 @@
 -- Chunky Drive D1 schema
 -- Storage-network IDs (channel_id, message_id) are TEXT: they are too large to store exactly as JavaScript numbers.
 
+-- Folders nest through parent_id; deleting a folder removes its sub-folders.
+CREATE TABLE IF NOT EXISTS folders (
+  id          TEXT PRIMARY KEY,
+  owner_id    TEXT NOT NULL,
+  parent_id   TEXT REFERENCES folders(id) ON DELETE CASCADE,  -- NULL = top level
+  name        TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- No two folders with the same name (ignoring case) side by side.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_name ON folders(owner_id, COALESCE(parent_id, ''), name COLLATE NOCASE);
+
 -- One row per uploaded file.
 CREATE TABLE IF NOT EXISTS files (
   id          TEXT PRIMARY KEY,
@@ -12,6 +24,7 @@ CREATE TABLE IF NOT EXISTS files (
   channel_id  TEXT NOT NULL,                      -- all chunks of a file live in this one channel
   chunk_count INTEGER NOT NULL,
   status      TEXT NOT NULL DEFAULT 'uploading',  -- 'uploading' | 'ready' | 'failed'
+  folder_id   TEXT REFERENCES folders(id),        -- NULL = My Drive (top level)
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -27,6 +40,7 @@ CREATE TABLE IF NOT EXISTS chunks (
 
 -- Fast "list this user's files, newest first".
 CREATE INDEX IF NOT EXISTS idx_files_owner ON files(owner_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_files_folder ON files(owner_id, folder_id);
 
 -- Small preview image for picture files, made by the browser at upload time.
 CREATE TABLE IF NOT EXISTS thumbnails (

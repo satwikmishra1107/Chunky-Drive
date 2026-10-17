@@ -3,20 +3,14 @@
   "name": "chunkydrive",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  // Better Auth uses Node's async_hooks.
   "compatibility_flags": ["nodejs_compat"],
-  // The live site. Cloudflare creates the DNS record and certificate for it on deploy.
   "routes": [{ "pattern": "chunkydrive.satwikdevs.in", "custom_domain": true }],
-  // Only the domain above, not an extra *.workers.dev address.
   "workers_dev": false,
-  // The built web app (web/dist) is served by this Worker too. /api/* goes to the code
-  // in src/; every other path is the page, with unknown paths (like /signup) getting index.html.
-  "assets": {
+   "assets": {
     "directory": "../web/dist",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  // Daily at 03:00 UTC: clear out uploads that were never finished (see src/index.ts).
   "triggers": { "crons": ["0 3 * * *"] },
   "d1_databases": [
     {
@@ -28,12 +22,8 @@
   ],
   "vars": {
     "CHANNEL_IDS": "1560709921220071577,1560710173662777435",
-    // Where users open the site. Locally, .dev.vars overrides this with http://localhost:5173.
     "BETTER_AUTH_URL": "https://chunkydrive.satwikdevs.in",
-    // Sender for sign-up codes and password resets (domain must be verified in Resend).
     "MAIL_FROM": "noreply@satwikdevs.in",
     "MAIL_FROM_NAME": "Chunky Drive"
   }
-  // Secrets live in .dev.vars locally (see .dev.vars.example), and are set with
-  // `npx wrangler secret put <NAME>` before deploying.
 }

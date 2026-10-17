@@ -8,6 +8,15 @@ export type FileSummary = {
   created_at: string;
   has_thumbnail: number;
   chunk_count: number;
+  folder_id: string | null;
+};
+
+// A folder; parent_id null means it sits at the top of My Drive.
+export type Folder = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  created_at: string;
 };
 
 export const thumbnailUrl = (id: string) => `/api/files/${id}/thumbnail`;
@@ -44,9 +53,31 @@ export const putThumbnail = (id: string, image: Blob) =>
     body: image,
   });
 
-export const deleteFile =(id: string) => request<{ ok: true }>(`/files/${id}`, { method: "DELETE" });
+export const listFolders = () => request<Folder[]>("/folders");
 
-export const startUpload =(file: File) =>
+// `renamed` is true when the name was taken there and a " (1)"-style name was used instead.
+export const createFolder = (name: string, parentId: string | null) =>
+  request<{ folder: Folder; renamed: boolean }>("/folders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, parentId }),
+  });
+
+// Moves files and folders into `targetFolderId` (null = My Drive). `renamed` lists folders
+// that got a " (1)"-style name because theirs was taken there.
+export const moveItems = (fileIds: string[], folderIds: string[], targetFolderId: string | null) =>
+  request<{ ok: true; renamed: { from: string; to: string }[] }>("/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileIds, folderIds, targetFolderId }),
+  });
+
+// Deletes the folder and everything inside it.
+export const deleteFolder = (id: string) => request<{ ok: true }>(`/folders/${id}`, { method: "DELETE" });
+
+export const deleteFile = (id: string) => request<{ ok: true }>(`/files/${id}`, { method: "DELETE" });
+
+export const startUpload = (file: File, folderId: string | null) =>
   request<{ fileId: string; chunkSize: number; chunkCount: number }>("/files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,6 +85,7 @@ export const startUpload =(file: File) =>
       name: file.name,
       size: file.size,
       mimeType: file.type || "application/octet-stream",
+      folderId,
     }),
   });
 

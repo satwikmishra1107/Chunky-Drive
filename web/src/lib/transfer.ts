@@ -79,10 +79,10 @@ export class PausedError extends Error {
 
 export type UploadJob = { fileId: string; chunkSize: number; chunkCount: number };
 
-// Creates the file record on the server.
-export async function createUploadJob(file: File): Promise<UploadJob> {
+// Creates the file record on the server, inside `folderId` (null = My Drive).
+export async function createUploadJob(file: File, folderId: string | null): Promise<UploadJob> {
   if (file.size === 0) throw new Error("Empty files can't be uploaded");
-  return startUpload(file);
+  return startUpload(file, folderId);
 }
 
 // Sends whatever chunks the server doesn't have yet, then seals the file. Aborting `signal`

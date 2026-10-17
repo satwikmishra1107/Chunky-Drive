@@ -65,6 +65,10 @@ async function storageApi(
   }
 }
 
+function getFolder(env: Bindings, folderId: string, ownerId: string) {
+  return env.DB.prepare("SELECT id FROM folders WHERE id = ? AND owner_id = ?").bind(folderId, ownerId).first();
+}
+
 function getFile(env: Bindings, fileId: string, ownerId: string) {
   return env.DB.prepare("SELECT * FROM files WHERE id = ? AND owner_id = ?")
     .bind(fileId, ownerId)
@@ -73,9 +77,13 @@ function getFile(env: Bindings, fileId: string, ownerId: string) {
 
 // Start an upload: creates the file record and tells the client how big each chunk must be.
 app.post("/files", async (c) => {
-  const body = await c.req.json<{ name?: string; size?: number; mimeType?: string }>();
+  const body = await c.req.json<{ name?: string; size?: number; mimeType?: string; folderId?: string | null }>();
   if (!body.name || !Number.isSafeInteger(body.size) || body.size! <= 0) {
     return c.json({ error: "name and a positive size are required" }, 400);
+  }
+  const folderId = body.folderId ?? null;
+  if (folderId && !(await getFolder(c.env, folderId, c.get("userId")))) {
+    return c.json({ error: "Folder not found" }, 404);
   }
 
   const channels = c.env.CHANNEL_IDS.split(",").map((id) => id.trim()).filter(Boolean);
@@ -84,9 +92,9 @@ app.post("/files", async (c) => {
   const chunkCount = Math.ceil(body.size! / CHUNK_SIZE);
 
   await c.env.DB.prepare(
-    "INSERT INTO files (id, owner_id, name, size, mime_type, channel_id, chunk_count) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO files (id, owner_id, name, size, mime_type, channel_id, chunk_count, folder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(fileId, c.get("userId"), body.name, body.size, body.mimeType ?? null, channelId, chunkCount)
+    .bind(fileId, c.get("userId"), body.name, body.size, body.mimeType ?? null, channelId, chunkCount, folderId)
     .run();
 
   return c.json({ fileId, chunkSize: CHUNK_SIZE, chunkCount }, 201);
@@ -216,7 +224,7 @@ app.post("/files/:id/complete", async (c) => {
 // List the owner's finished files, newest first.
 app.get("/files", async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id, name, size, mime_type, created_at, chunk_count,
+    `SELECT id, name, size, mime_type, created_at, chunk_count, folder_id,
        EXISTS (SELECT 1 FROM thumbnails WHERE thumbnails.file_id = files.id) AS has_thumbnail
      FROM files
      WHERE owner_id = ? AND status = 'ready' ORDER BY created_at DESC`,
@@ -257,6 +265,157 @@ app.delete("/files/:id", async (c) => {
     c.env.DB.prepare("DELETE FROM thumbnails WHERE file_id = ?").bind(file.id),
     c.env.DB.prepare("DELETE FROM chunks WHERE file_id = ?").bind(file.id),
     c.env.DB.prepare("DELETE FROM files WHERE id = ?").bind(file.id),
+  ]);
+
+  return c.json({ ok: true });
+});
+
+// ---- Folders. A file sits in one folder (files.folder_id, NULL = My Drive); folders nest
+// through parent_id. The page loads every folder at once and works out the tree itself.
+
+const MAX_FOLDER_NAME = 255;
+
+app.get("/folders", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    "SELECT id, name, parent_id, created_at FROM folders WHERE owner_id = ? ORDER BY name COLLATE NOCASE",
+  )
+    .bind(c.get("userId"))
+    .all();
+  return c.json(results);
+});
+
+// Create a folder. A name already used in that place gets " (1)", " (2)", … like Windows does,
+// and the reply says so, so the page can tell the user.
+app.post("/folders", async (c) => {
+  const body = await c.req.json<{ name?: string; parentId?: string | null }>();
+  const requested = body.name?.trim() ?? "";
+  if (!requested || requested.length > MAX_FOLDER_NAME) {
+    return c.json({ error: `Folder name must be 1 to ${MAX_FOLDER_NAME} characters` }, 400);
+  }
+  const ownerId = c.get("userId");
+  const parentId = body.parentId ?? null;
+  if (parentId && !(await getFolder(c.env, parentId, ownerId))) return c.json({ error: "Folder not found" }, 404);
+
+  const { results } = await c.env.DB.prepare(
+    "SELECT name FROM folders WHERE owner_id = ? AND parent_id IS ?",
+  )
+    .bind(ownerId, parentId)
+    .all<{ name: string }>();
+  const taken = new Set(results.map((row) => row.name.toLowerCase()));
+  let name = requested;
+  for (let n = 1; taken.has(name.toLowerCase()); n++) name = `${requested} (${n})`;
+
+  const folder = { id: crypto.randomUUID(), name, parent_id: parentId, created_at: "" };
+  try {
+    const row = await c.env.DB.prepare(
+      "INSERT INTO folders (id, owner_id, parent_id, name) VALUES (?, ?, ?, ?) RETURNING created_at",
+    )
+      .bind(folder.id, ownerId, parentId, name)
+      .first<{ created_at: string }>();
+    folder.created_at = row!.created_at;
+  } catch {
+    // Another tab took the same name a moment ago (the unique index caught it).
+    return c.json({ error: "A folder with that name was just created. Please try again." }, 409);
+  }
+  return c.json({ folder, renamed: name !== requested }, 201);
+});
+
+// Move files and folders into `targetFolderId` (null = My Drive). Only database rows change,
+// so it's instant at any size. A folder can't go inside itself or its own sub-folders, and a
+// folder whose name is already used in the target gets " (1)"-style renamed, like on create.
+// Files may share names, as in Google Drive.
+const MAX_MOVE_ITEMS = 500;
+
+app.post("/move", async (c) => {
+  const body = await c.req.json<{ fileIds?: string[]; folderIds?: string[]; targetFolderId?: string | null }>();
+  const fileIds = [...new Set(body.fileIds ?? [])];
+  const folderIds = [...new Set(body.folderIds ?? [])];
+  const targetId = body.targetFolderId ?? null;
+  const ownerId = c.get("userId");
+  if (fileIds.length + folderIds.length === 0) return c.json({ error: "Nothing to move" }, 400);
+  if (fileIds.length + folderIds.length > MAX_MOVE_ITEMS) {
+    return c.json({ error: `Move at most ${MAX_MOVE_ITEMS} items at once` }, 400);
+  }
+  if (targetId && !(await getFolder(c.env, targetId, ownerId))) return c.json({ error: "Folder not found" }, 404);
+
+  // The target and every folder above it: none of the moving folders may be among them.
+  if (targetId && folderIds.length) {
+    const { results: above } = await c.env.DB.prepare(
+      `WITH RECURSIVE up(id, parent_id) AS (
+         SELECT id, parent_id FROM folders WHERE id = ? AND owner_id = ?
+         UNION ALL SELECT folders.id, folders.parent_id FROM folders JOIN up ON folders.id = up.parent_id
+       ) SELECT id FROM up`,
+    )
+      .bind(targetId, ownerId)
+      .all<{ id: string }>();
+    if (above.some((row) => folderIds.includes(row.id))) {
+      return c.json({ error: "A folder can't be moved inside itself" }, 400);
+    }
+  }
+
+  const { results: moving } = await c.env.DB.prepare(
+    `SELECT id, name, parent_id FROM folders WHERE owner_id = ? AND id IN (SELECT value FROM json_each(?))`,
+  )
+    .bind(ownerId, JSON.stringify(folderIds))
+    .all<{ id: string; name: string; parent_id: string | null }>();
+  if (moving.length !== folderIds.length) return c.json({ error: "Folder not found" }, 404);
+
+  // Folder names already in the target. Moved folders' new names are added as they're picked.
+  const { results: present } = await c.env.DB.prepare("SELECT name FROM folders WHERE owner_id = ? AND parent_id IS ?")
+    .bind(ownerId, targetId)
+    .all<{ name: string }>();
+  const taken = new Set(present.map((row) => row.name.toLowerCase()));
+
+  const renamed: { from: string; to: string }[] = [];
+  const statements: D1PreparedStatement[] = [];
+  for (const folder of moving) {
+    if (folder.parent_id === targetId) continue; // Already there.
+    let name = folder.name;
+    for (let n = 1; taken.has(name.toLowerCase()); n++) name = `${folder.name} (${n})`;
+    taken.add(name.toLowerCase());
+    if (name !== folder.name) renamed.push({ from: folder.name, to: name });
+    statements.push(
+      c.env.DB.prepare("UPDATE folders SET parent_id = ?, name = ? WHERE id = ? AND owner_id = ?").bind(targetId, name, folder.id, ownerId),
+    );
+  }
+  if (fileIds.length) {
+    statements.push(
+      c.env.DB.prepare("UPDATE files SET folder_id = ? WHERE owner_id = ? AND id IN (SELECT value FROM json_each(?))").bind(
+        targetId,
+        ownerId,
+        JSON.stringify(fileIds),
+      ),
+    );
+  }
+
+  try {
+    if (statements.length) await c.env.DB.batch(statements);
+  } catch {
+    // Another tab used one of the new names a moment ago (the unique index caught it).
+    return c.json({ error: "Some folder names changed while moving. Please try again." }, 409);
+  }
+  return c.json({ ok: true, renamed });
+});
+
+// Delete a folder with everything inside it: sub-folders at any depth, their files, chunk
+// records and thumbnails. As with single files, the stored chunks are left in place.
+app.delete("/folders/:id", async (c) => {
+  const ownerId = c.get("userId");
+  const folder = await getFolder(c.env, c.req.param("id"), ownerId);
+  if (!folder) return c.json({ error: "Folder not found" }, 404);
+
+  // `tree` is the folder plus every folder below it.
+  const tree = `WITH RECURSIVE tree(id) AS (
+      SELECT id FROM folders WHERE id = ? AND owner_id = ?
+      UNION ALL SELECT folders.id FROM folders JOIN tree ON folders.parent_id = tree.id
+    )`;
+  const filesInTree = "SELECT id FROM files WHERE owner_id = ? AND folder_id IN (SELECT id FROM tree)";
+  const [id, owner] = [folder.id, ownerId];
+  await c.env.DB.batch([
+    c.env.DB.prepare(`${tree} DELETE FROM thumbnails WHERE file_id IN (${filesInTree})`).bind(id, owner, owner),
+    c.env.DB.prepare(`${tree} DELETE FROM chunks WHERE file_id IN (${filesInTree})`).bind(id, owner, owner),
+    c.env.DB.prepare(`${tree} DELETE FROM files WHERE id IN (${filesInTree})`).bind(id, owner, owner),
+    c.env.DB.prepare(`${tree} DELETE FROM folders WHERE id IN (SELECT id FROM tree)`).bind(id, owner),
   ]);
 
   return c.json({ ok: true });
