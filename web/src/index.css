@@ -34,6 +34,8 @@
   --accent-ink: #ffffff;
   --accent-soft: #e3f2ef;
   --danger: #dc2626;
+  --glow-teal: 30%;
+  --glow-indigo: 24%;
   color-scheme: light;
 }
 
@@ -51,6 +53,8 @@
   --accent-ink: #042f2e;
   --accent-soft: #0d2f2c;
   --danger: #f87171;
+  --glow-teal: 22%;
+  --glow-indigo: 34%;
   color-scheme: dark;
 }
 
@@ -67,12 +71,24 @@
     --accent-ink: #042f2e;
     --accent-soft: #0d2f2c;
     --danger: #f87171;
+    --glow-teal: 22%;
+    --glow-indigo: 34%;
     color-scheme: dark;
   }
 }
 
 body {
   @apply bg-bg font-sans text-ink antialiased;
+}
+
+/* Soft colored light from the top-right corner, fading into the page (inspired by Discord's
+   developer portal). Teal from the theme plus a little indigo for depth; behind the header
+   and sidebar, while the file area keeps its solid card. */
+.app-glow {
+  background:
+    radial-gradient(ellipse 85% 70% at 80% -15%, color-mix(in srgb, var(--accent) var(--glow-teal), transparent), transparent 70%),
+    radial-gradient(ellipse 55% 55% at 102% -8%, color-mix(in srgb, #6366f1 var(--glow-indigo), transparent), transparent 70%),
+    var(--bg);
 }
 
 /* Tailwind v4 leaves buttons with the default arrow cursor; show the hand on anything clickable. */

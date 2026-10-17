@@ -210,7 +210,7 @@ export default function AuthPage() {
   const codeStep = mode === "verify" || mode === "reset";
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="app-glow flex min-h-dvh flex-col">
       <div className="flex items-center justify-between p-4 md:px-6">
         <div className="flex items-center gap-2">
           <Logo className="size-7 text-accent" />

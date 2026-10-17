@@ -646,7 +646,7 @@ export default function Drive({ user }: Props) {
 
   return (
     <div
-      className="flex h-dvh flex-col"
+      className="app-glow flex h-dvh flex-col"
       onDragOver={(e) => {
         // Only files dragged in from the computer; moving items inside the drive is handled elsewhere.
         if (!e.dataTransfer.types.includes("Files")) return;
