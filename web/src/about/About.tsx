@@ -135,7 +135,7 @@ const FAQ = [
 
 export default function About() {
   useEffect(() => {
-    document.title = "How it works · Shie Drive";
+    document.title = "How it works · Chunky Drive";
 
     // Fade sections up as they come into view.
     const items = document.querySelectorAll("[data-reveal]");
@@ -161,7 +161,7 @@ export default function About() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6 md:px-12">
           <a href="#top" className="flex items-center gap-2.5">
             <Logo className="size-6 text-accent" />
-            <span className="font-display text-sm font-semibold tracking-tight text-ink">Shie Drive</span>
+            <span className="font-display text-sm font-semibold tracking-tight text-ink">Chunky Drive</span>
           </a>
           <nav className="flex items-center gap-4 text-sm sm:gap-7">
             {NAV.map((item) => (
@@ -192,13 +192,13 @@ export default function About() {
                 <span>· Distributed file storage</span>
               </div>
               <h1 data-reveal className="font-display text-5xl font-semibold tracking-tight text-ink sm:text-6xl">
-                Shie Drive
+                Chunky Drive
               </h1>
               <p data-reveal className="font-display text-xl font-medium leading-snug text-ink/80 sm:text-2xl">
                 Unlimited cloud storage — without running a single storage server.
               </p>
               <p data-reveal className="text-base font-light leading-relaxed text-ink/80">
-                Shie Drive works like any cloud drive: sign in, drop in a file, download it anywhere. Behind the
+                Chunky Drive works like any cloud drive: sign in, drop in a file, download it anywhere. Behind the
                 scenes, every file is cut into 8 MB pieces, fingerprinted, and spread across a third-party storage
                 network. Our own database keeps only a map of where each piece lives — so the space available to you is
                 effectively unlimited.

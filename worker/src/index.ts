@@ -118,35 +118,23 @@ app.put("/files/:id/chunks/:index", async (c) => {
   // itself. Only the small multipart header and footer are written by this code.
   const boundary = `chunky-${crypto.randomUUID()}`;
   const encoder = new TextEncoder();
+  // Multipart lines must end in CRLF.
+  const CRLF = "\r\n";
   const head = encoder.encode(
-    `--${boundary}
-
-Content-Disposition: form-data; name="payload_json"
-
-Content-Type: application/json
-
-
-
-` +
-      JSON.stringify({ attachments: [{ id: 0, filename: "chunk.bin" }] }) +
-      `
-
---${boundary}
-
-Content-Disposition: form-data; name="files[0]"; filename="chunk.bin"
-
-` +
-      `Content-Type: application/octet-stream
-
-
-
-`,
+    [
+      `--${boundary}`,
+      `Content-Disposition: form-data; name="payload_json"`,
+      "Content-Type: application/json",
+      "",
+      JSON.stringify({ attachments: [{ id: 0, filename: "chunk.bin" }] }),
+      `--${boundary}`,
+      `Content-Disposition: form-data; name="files[0]"; filename="chunk.bin"`,
+      "Content-Type: application/octet-stream",
+      "",
+      "",
+    ].join(CRLF),
   );
-  const tail = encoder.encode(`
-
---${boundary}--
-
-`);
+  const tail = encoder.encode(`${CRLF}--${boundary}--${CRLF}`);
   // Also checks the body really is `size` bytes: a longer or shorter one makes the send fail.
   const { readable, writable } = new FixedLengthStream(head.byteLength + size + tail.byteLength);
   const pump = (async () => {
